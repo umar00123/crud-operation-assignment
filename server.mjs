@@ -1,167 +1,163 @@
 import express from "express";
 import { customAlphabet } from 'nanoid'
 const nanoid = customAlphabet('1234567890', 20)
+import { MongoClient } from "mongodb"
 
-const mongodbURI=process.env.mongodbURI || " mongodb+srv://dbuser:dbpassword@cluster0.nxgymft.mongodb.net/?retryWrites=true&w=majority";
+import './config/index.mjs'
+
+// const mongodbURI = `mongodb+srv://${process.env.MONGODB_USERNAME}:${process.env.MONGODB_PASSWORD}@cluster0.bykenlf.mongodb.net/?retryWrites=true&w=majority`
+const mongodbURI = "mongodb+srv://talha1:talha1@cluster0.nxgymft.mongodb.net/?retryWrites=true&w=majority"
+
+let productsCollection
+try {
+  const client = new MongoClient(mongodbURI);
+  const database = client.db('ecom');
+  console.log("db", database);
+  productsCollection = database.collection('products');
+} catch (err) {
+  console.log("errr", err);
+}
+
 
 const app = express();
 app.use(express.json());
 
-app.get("/", (req, res) => {
-  res.send("hello world");
+// ... (existing imports and code) ...
+
+app.get("/products", async (req, res, next) => {
+  try {
+    const products = await productsCollection.find().toArray();
+    res.send({
+      message: "all products",
+      data: products
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
-
-let products = [
-  {
-    id: nanoid(), // always a number
-    name: "abc product",
-    price: "$23.12",
-    description: "abc product description"
-  }
-];
-
-app.get("/products", (req, res) => {
-  res.send({
-    message: "all products",
-    data: products
-  });
-});
-
-//  https://baseurl.com/product/1231
-app.get("/product/:id", (req, res) => {
-  console.log(typeof req.params.id)
-
-  if (isNaN(req.params.id)) {
-    res.status(403).send("invalid product id")
-  }
-
-  let isFound = false;
-
-  for (let i = 0; i < products.length; i++) {
-    if (products[i].id === req.params.id) {
-      isFound = i;
-      break;
+app.get("/product/:id", async (req, res, next) => {
+  try {
+    const productId = req.params.id;
+    if (isNaN(productId)) {
+      res.status(403).send("invalid product id");
     }
-  }
 
-  if (isFound === false) {
-    res.status(404);
-    res.send({
-      message: "product not found"
-    });
-  } else {
-    res.send({
-      message: "product found with id: " + products[isFound].id,
-      data: products[isFound]
-    });
-  }
-});
+    const product = await productsCollection.findOne({ id: productId });
 
-app.post("/product", (req, res) => {
-
-  // {
-  //   id: 212342, // always a number
-  //   name: "abc product",
-  //   price: "$23.12",
-  //   description: "abc product description"
-  // }
-
-
-  if (!req.body.name
-    || !req.body.price
-    || !req.body.description) {
-
-    res.status(403).send(`
-      required parameter missing. example JSON request body:
-      {
-        name: "abc product",
-        price: "$23.12",
-        description: "abc product description"
-      }`);
-  }
-
-  products.push({
-    id: nanoid(),
-    name: req.body.name,
-    price: req.body.price,
-    description: req.body.description,
-  });
-
-
-  res.status(201).send({ message: "created product" });
-});
-
-app.put("/product/:id", (req, res) => {
-
-  if (
-    !req.body.name
-    && !req.body.price
-    && !req.body.description) {
-
-    res.status(403).send(`
-      required parameter missing. 
-      atleast one parameter is required: name, price or description to complete update
-      example JSON request body:
-      {
-        name: "abc product",
-        price: "$23.12",
-        description: "abc product description"
-      }`);
-  }
-
-
-  let isFound = false;
-
-  for (let i = 0; i < products.length; i++) {
-    if (products[i].id === req.params.id) {
-      isFound = i;
-      break;
+    if (!product) {
+      res.status(404);
+      res.send({
+        message: "product not found"
+      });
+    } else {
+      res.send({
+        message: "product found with id: " + product.id,
+        data: product
+      });
     }
-  }
-
-  if (isFound === false) {
-    res.status(404);
-    res.send({
-      message: "product not found"
-    });
-  } else {
-
-    if (req.body.name) products[isFound].name = req.body.name
-    if (req.body.price) products[isFound].price = req.body.price
-    if (req.body.description) products[isFound].description = req.body.description
-
-    res.send({
-      message: "product is updated with id: " + products[isFound].id,
-      data: products[isFound]
-    });
+  } catch (err) {
+    next(err);
   }
 });
 
-app.delete("/product/:id", (req, res) => {
+app.post("/product", async (req, res, next) => {
+  try {
+    const { name, price, description } = req.body;
 
-  let isFound = false;
-
-  for (let i = 0; i < products.length; i++) {
-    if (products[i].id === req.params.id) {
-      isFound = i;
-      break;
+    if (!name || !price || !description) {
+      res.status(400).send(`
+        Required parameter missing. Example JSON request body:
+        {
+          "name": "abc product",
+          "price": "$23.12",
+          "description": "abc product description"
+        }`);
+      return;
     }
-  }
 
-  if (isFound === false) {
-    res.status(404);
-    res.send({
-      message: "product not found"
-    });
-  } else {
-    products.splice(isFound, 1)
+    const doc = {
+      id: nanoid(),
+      name,
+      price,
+      description,
+    };
 
-    res.send({
-      message: "product is deleted"
-    });
+    await productsCollection.insertOne(doc);
+    res.status(201).send({ message: "created product" });
+  } catch (err) {
+    next(err);
   }
 });
+
+app.put("/product/:id", async (req, res, next) => {
+  try {
+    const productId = req.params.id;
+    const { name, price, description } = req.body;
+
+    if (!name && !price && !description) {
+      res.status(400).send(`
+        Required parameter missing. 
+        At least one parameter is required: name, price, or description to complete the update.
+        Example JSON request body:
+        {
+          "name": "abc product",
+          "price": "$23.12",
+          "description": "abc product description"
+        }`);
+      return;
+    }
+
+    const product = await productsCollection.findOne({ id: productId });
+
+    if (!product) {
+      res.status(404).send({
+        message: "product not found"
+      });
+    } else {
+      if (name) product.name = name;
+      if (price) product.price = price;
+      if (description) product.description = description;
+
+      await productsCollection.updateOne({ id: productId }, { $set: product });
+
+      res.send({
+        message: "product is updated with id: " + product.id,
+        data: product
+      });
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.delete("/product/:id", async (req, res, next) => {
+  try {
+    const productId = req.params.id;
+    const product = await productsCollection.findOne({ id: productId });
+
+    if (!product) {
+      res.status(404).send({
+        message: "product not found"
+      });
+    } else {
+      await productsCollection.deleteOne({ id: productId });
+      res.send({
+        message: "product is deleted"
+      });
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Error handler middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).send("Something went wrong!");
+});
+
+// ... (remaining code) ...
 
 
 
