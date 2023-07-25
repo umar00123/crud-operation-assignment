@@ -1,165 +1,127 @@
 import express from "express";
-import { customAlphabet } from 'nanoid'
-const nanoid = customAlphabet('1234567890', 20)
-import { MongoClient } from "mongodb"
+import { MongoClient } from "mongodb";
+import { customAlphabet } from 'nanoid';
+const nanoid = customAlphabet('1234567890', 20);
 
-import './config/index.mjs'
-
-// const mongodbURI = `mongodb+srv://${process.env.MONGODB_USERNAME}:${process.env.MONGODB_PASSWORD}@cluster0.bykenlf.mongodb.net/?retryWrites=true&w=majority`
 const mongodbURI = "mongodb+srv://talha1:talha1@cluster0.nxgymft.mongodb.net/?retryWrites=true&w=majority"
-
-let productsCollection
-try {
-  const client = new MongoClient(mongodbURI);
-  const database = client.db('ecom');
-  console.log("db", database);
-  productsCollection = database.collection('products');
-} catch (err) {
-  console.log("errr", err);
-}
-
-
 const app = express();
 app.use(express.json());
 
-// ... (existing imports and code) ...
+let productsCollection;
 
-app.get("/products", async (req, res, next) => {
+(async () => {
   try {
-    const products = await productsCollection.find().toArray();
+    const client = new MongoClient(mongodbURI);
+    await client.connect();
+    const database = client.db('ecom');
+    productsCollection = database.collection('products');
+    console.log("Connected to MongoDB");
+  } catch (error) {
+    console.log("Error connecting to MongoDB:", error);
+  }
+})();
+
+
+app.get("/products", async (req, res) => {
+  try {
+    const allProducts = await productsCollection.find({}).toArray();
     res.send({
-      message: "all products",
-      data: products
+      message: "All products",
+      data: allProducts,
     });
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    res.status(500).send({
+      message: "Error fetching products",
+    });
   }
 });
 
-app.get("/product/:id", async (req, res, next) => {
+app.get("/product/:id", async (req, res) => {
   try {
-    const productId = req.params.id;
-    if (isNaN(productId)) {
-      res.status(403).send("invalid product id");
-    }
-
-    const product = await productsCollection.findOne({ id: productId });
-
+    const product = await productsCollection.findOne({ id: req.params.id });
     if (!product) {
-      res.status(404);
-      res.send({
-        message: "product not found"
+      res.status(404).send({
+        message: "Product not found",
       });
     } else {
       res.send({
-        message: "product found with id: " + product.id,
-        data: product
+        message: "Product found with id: " + product.id,
+        data: product,
       });
     }
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    res.status(500).send({
+      message: "Error fetching product",
+    });
   }
 });
 
-app.post("/product", async (req, res, next) => {
+app.post("/product", async (req, res) => {
   try {
-    const { name, price, description } = req.body;
-
-    if (!name || !price || !description) {
-      res.status(400).send(`
-        Required parameter missing. Example JSON request body:
-        {
-          "name": "abc product",
-          "price": "$23.12",
-          "description": "abc product description"
-        }`);
-      return;
-    }
-
     const doc = {
       id: nanoid(),
-      name,
-      price,
-      description,
+      name: req.body.name,
+      price: req.body.price,
+      description: req.body.description,
     };
-
-    await productsCollection.insertOne(doc);
-    res.status(201).send({ message: "created product" });
-  } catch (err) {
-    next(err);
+    const result = await productsCollection.insertOne(doc);
+    res.status(201).send({
+      message: "Created product",
+      data: doc,
+    });
+  } catch (error) {
+    res.status(500).send({
+      message: "Error creating product",
+    });
   }
 });
 
-app.put("/product/:id", async (req, res, next) => {
+app.put("/product/:id", async (req, res) => {
   try {
-    const productId = req.params.id;
-    const { name, price, description } = req.body;
-
-    if (!name && !price && !description) {
-      res.status(400).send(`
-        Required parameter missing. 
-        At least one parameter is required: name, price, or description to complete the update.
-        Example JSON request body:
-        {
-          "name": "abc product",
-          "price": "$23.12",
-          "description": "abc product description"
-        }`);
-      return;
-    }
-
-    const product = await productsCollection.findOne({ id: productId });
-
+    const product = await productsCollection.findOne({ id: req.params.id });
     if (!product) {
       res.status(404).send({
-        message: "product not found"
+        message: "Product not found",
       });
     } else {
-      if (name) product.name = name;
-      if (price) product.price = price;
-      if (description) product.description = description;
+      const updatedFields = {};
+      if (req.body.name) updatedFields.name = req.body.name;
+      if (req.body.price) updatedFields.price = req.body.price;
+      if (req.body.description) updatedFields.description = req.body.description;
 
-      await productsCollection.updateOne({ id: productId }, { $set: product });
+      await productsCollection.updateOne({ id: req.params.id }, { $set: updatedFields });
 
       res.send({
-        message: "product is updated with id: " + product.id,
-        data: product
+        message: "Product is updated with id: " + req.params.id,
+        data: { ...product, ...updatedFields },
       });
     }
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    res.status(500).send({
+      message: "Error updating product",
+    });
   }
 });
 
-app.delete("/product/:id", async (req, res, next) => {
+app.delete("/product/:id", async (req, res) => {
   try {
-    const productId = req.params.id;
-    const product = await productsCollection.findOne({ id: productId });
-
+    const product = await productsCollection.findOne({ id: req.params.id });
     if (!product) {
       res.status(404).send({
-        message: "product not found"
+        message: "Product not found",
       });
     } else {
-      await productsCollection.deleteOne({ id: productId });
+      await productsCollection.deleteOne({ id: req.params.id });
       res.send({
-        message: "product is deleted"
+        message: "Product is deleted",
       });
     }
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    res.status(500).send({
+      message: "Error deleting product",
+    });
   }
 });
-
-// Error handler middleware
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).send("Something went wrong!");
-});
-
-// ... (remaining code) ...
-
-
 
 
 const port = process.env.PORT || 3000;
