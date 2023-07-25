@@ -1,5 +1,5 @@
 {
-  "name": "01.-hello-world",
+  "name": "cls",
   "version": "1.0.0",
   "description": "testing",
   "main": "server.mjs",
@@ -15,6 +15,8 @@
   "license": "ISC",
   "dependencies": {
     "express": "^4.18.2",
+    "mongodb": "5.7",
+    "mongoose": "^7.4.0",
     "nanoid": "^4.0.2"
   },
   "devDependencies": {

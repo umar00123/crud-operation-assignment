@@ -2,14 +2,14 @@ import express from "express";
 import { customAlphabet } from 'nanoid'
 const nanoid = customAlphabet('1234567890', 20)
 
+const mongodbURI=process.env.mongodbURI || " mongodb+srv://dbuser:dbpassword@cluster0.nxgymft.mongodb.net/?retryWrites=true&w=majority";
 
 const app = express();
 app.use(express.json());
 
 app.get("/", (req, res) => {
-  res.send("hello world!");
+  res.send("hello world");
 });
-
 
 
 let products = [
