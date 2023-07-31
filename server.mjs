@@ -20,7 +20,9 @@ let productsCollection;
     console.log("Error connecting to MongoDB:", error);
   }
 })();
-
+app.get('/', (req, res) => {
+  res.send('Hello World!')
+})
 
 app.get("/products", async (req, res) => {
   try {
